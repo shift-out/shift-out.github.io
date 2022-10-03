@@ -3,126 +3,45 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>魔方</title>
+	<title>Document</title>
 </head>
-<style>
-
-	.box{
-		width: 300px;
-		height: 300px;
-		background-color: black;
-		transform-style: preserve-3d;
-		animation: aa 4s linear infinite;
-	}
-	.fu{
-			width:300px ;
-			height:300px ;
-			border: 1px solid  #000;
-			margin: 150px auto;
-			perspective: 2000px;
-			transform-style: preserve-3d;
-		}
-	@keyframes aa {
-		0%{
-			transform: rotateX(90deg) rotateY(90deg);
-		}
-		30%{
-			transform: rotateX(180deg) rotateY(180deg);
-		}
-		50%{
-			transform: rotateX(360deg) rotateY(270deg);
-		}
-		75%{
-			transform: rotateX(180deg) rotateY(360deg);
-		}
-		100%{
-			transform: rotateX(90deg) rotateY(360deg);
-		}
-		
-	}
-	.page{
-			width: 300px;
-			height: 300px;
-			position: absolute;/*绝对定位*/
-		}
-		.top{
-			background-color: #f0f8ff;
-			transform: translateY(-150px) rotateX(90deg) ;
-		}
-		.botton{
-			background-color: #006400;
-			transform: translateY(150px) rotateX(90deg) ;
-		}
-		.left{
-			background-color: #ff8c00;
-			transform: translateX(-150px) rotateY(90deg) ;
-		}
-		.right{
-			background-color: #bdb76b;
-			transform: translateX(150px) rotateY(90deg) ;
-		}
-		.before{
-			background-color: #ff00ff;
-			transform: translateZ(-150px);
-		}
-		.after{
-			background-color: #7cfc00;
-			transform: translateZ(150px);
-			
-		}
-		.page div:nth-child(1){
-			animation:a1 2s linear infinite ;
-
-		}
-		.page div:nth-child(2){
-			animation:a1 2s linear infinite ;
-
-		}
-		.page div:nth-child(3){
-			animation:a1 3s linear infinite ;
-
-		}
-		@keyframes a1 {
-			0%{
-				
-			}
-			100%{
-				
-			}
-			
-		}
-</style>
 <body>
-	<div class="fu">
+	<div>
+		<textarea name="" id="" cols="30" rows="10">zheshiliulyan</textarea>
+		<button>发布留言</button>
+		<ul id="sss">
+			<li>这是第一条留言</li>
+			<li>这是第二条浏览</li>
+		</ul>
 		
-		<div class="box">
-			<div class="page top" > </div>
-			<div class="page botton"></div>
-			<div class="page left"></div>
-			<div class="page right"></div>
-			<div class="page before"></div>
-			<div class="page after"></div>
-
-		</div>
-		
-
 	</div>
-	<script type="text/javascript">
-		var arr= document.querySelectorAll(".page");
-		for(var i=0;i< arr.length;i++){
-			for(var h=0;h<3;h++){
-				for (var lie = 0; lie<3; lie++) {
-					var divs=document.createElement("div");
-					divs.style.cssText="width: 100px;height:100px; border: 2px solid #fff; box-sizing:border-box; position:absolute;";
-					arr[i].appendChild(divs);
-					divs.style.left=lie*100+"px";
-					divs.style.top= h*100+"px";
-
-				}
-
+	<script>
+		var text=document.querySelector("textarea");//文本域
+		var ul=document.querySelector("ul");//获得ul
+		var anniu=document.querySelector("button")//按钮
+		anniu.onclick=function(){
+			if(text.value==""){
+				alert("您并没有输入内容");
+				return false;
 			}
-
+			else{
+			var li=document.createElement("li");//创建li
+			ul.appendChild(li);//添加li
+			ul.children[ul.children.length-1].innerHTML=text.value;
+			var time= new Date().getTime();
+			localStorage.setItem(time,text.value);
+			//function aa(){
+			//for(var i=0;i<aa.length;i++){
+				//var kes =localStorage.key(i);
+				//var value=localStorage.getItem(kes);
+				//aa+=value;
+			//}
+			//ul.children[ul.children.length-1].innerHTML=aa;
+			//}
+			//aa();
+			//}
 		}
+		
 	</script>
 </body>
 </html>
