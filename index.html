@@ -4,44 +4,124 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Document</title>
+	<style>
+		.container{
+			width: 200px;
+			height: 360px;
+			background-color: #999;
+			position: relative;
+		}
+		.mode1{
+			width: 20px;
+			height: 20px;
+			background-color: pink;
+			border: .3px solid white;
+			box-sizing: border-box;
+			position: absolute;
+		}
+		.anniuzu button{
+			width: 40px;
+			height: 40px;
+			margin-top: 10px;
+		}
+	</style>
 </head>
-<body>
-	<div>
-		<textarea name="" id="" cols="30" rows="10">zheshiliulyan</textarea>
-		<button>发布留言</button>
-		<ul id="sss">
-			<li>这是第一条留言</li>
-			<li>这是第二条浏览</li>
-		</ul>
-		
+<body onload="init()">
+	<div class="container" id="container">
+		 
+	</div>
+	<div class="anniuzu">
+		<button sy=0>上</button>
+		<button sy=1>下</button>
+		<button sy=2>左</button>
+		<button sy=3>右</button>
 	</div>
 	<script>
-		var text=document.querySelector("textarea");//文本域
-		var ul=document.querySelector("ul");//获得ul
-		var anniu=document.querySelector("button")//按钮
-		anniu.onclick=function(){
-			if(text.value==""){
-				alert("您并没有输入内容");
-				return false;
+		//每次移动的距离
+		var STEP=20;
+		//分割为18行10列
+		var ROW=18,COL=10;
+		//创建每个模型的数据
+		var MODELS=[
+		{
+			0:{row:2,col:0},
+			1:{row:2,col:1},
+			2:{row:2,col:2},
+			3:{row:1,col:2}
+		}]
+		//当前使用的模型
+		var currentModel={}//出错时把var去掉换成全局变量
+		//标记16宫格的位置
+		var currentX=0,currentY=0;
+
+		//当body加载完成后加载这个函数，主函数：入口
+		function init(){
+			createModel();
+			document.onkeyup=keyboard;
+
+		}
+		//根据模型的数据源来创建对应的块元素
+		function createModel(){
+			//确定使用当前哪一个模型
+			currentModel=MODELS[0];
+			//生成对应数量的块元素
+			for(var  key in currentModel){
+				var divEle=document.createElement("div");
+				divEle.className="mode1";
+				document.getElementById("container").appendChild(divEle);
 			}
-			else{
-			var li=document.createElement("li");//创建li
-			ul.appendChild(li);//添加li
-			ul.children[ul.children.length-1].innerHTML=text.value;
-			//var time= new Date().getTime();
-			//localStorage.setItem(time,text.value);
-			//function aa(){
-			//for(var i=0;i<aa.length;i++){
-				//var kes =localStorage.key(i);
-				//var value=localStorage.getItem(kes);
-				//aa+=value;
-			//}
-			//ul.children[ul.children.length-1].innerHTML=aa;
-			//}
-			//aa();
+			locationBlocks();
+		}
+		function locationBlocks(){
+			//拿到所有的块元素，
+			var eles= document.getElementsByClassName("mode1");
+			for(var i=0;i<eles.length;i++){
+				//单个块元素
+				var activityModelEle=eles[i];
+				var blockMode1= currentModel[i];
+				activityModelEle.style.top=(currentY+ blockMode1.row)*STEP+"px";
+				activityModelEle.style.left=(currentX+ blockMode1.col)*STEP+"px";
+			}
+			//找到每个块元素对应的数据，根据每个块元素对应的数据来制定块元素的位置
+		}
+		//监听用户键盘事件
+		function keyboard(eve){
+			//console.log(eve.key);
+			//console.log(eve.keyCode); 
+			switch(eve.keyCode){
+				case 38:console.log("上"); move(0,-1); break;
+				case 39:console.log("右"); move(1,0); break;
+				case 40:console.log("下"); move(0,1); break;
+				case 37:console.log("左"); move(-1,0); break;
+			}
+
+		}
+		//按钮控制移动
+		var dianj=document.querySelector(".anniuzu").querySelectorAll("button");
+		for(var i=0;i<dianj.length;i++){
+			dianj[i].onclick=function(){
+			var ss=parseInt(this.getAttribute("sy"));
+			switch(ss){
+				case 0: move(0,-1); break;
+				case 1: move(0,1); break;
+				case 2: move(-1,0); break;
+				case 3: move(1,0); break;
 			}
 		}
-		
+		}
+		//键盘控制移动
+		function move(x,y){   //控制移动
+			//控制块元素进行移动
+			//var yidong = document.getElementsByClassName("mode1")[0];
+			//yidong.style.top=parseInt(yidong.style.top||0)+y*STEP+"px";
+			//yidong.style.left=parseInt(yidong.style.left||0)+x*STEP+"px";
+			currentX+=x;
+			currentY+=y;
+		    //根据16宫格的位置来重新定位块元素
+			locationBlocks();
+
+		}
+
 	</script>
 </body>
 </html>
