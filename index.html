@@ -3,6 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 	<title>Document</title>
 	<style>
 		.container{
@@ -23,6 +24,16 @@
 			width: 40px;
 			height: 40px;
 			margin-top: 10px;
+			margin-left: 5px;
+		}
+		.mode2{
+			width: 20px;
+			height: 20px;
+			background-color: orange;
+			border: .3px solid white;
+			box-sizing: border-box;
+			position: absolute;
+
 		}
 	</style>
 </head>
@@ -31,7 +42,7 @@
 		 
 	</div>
 	<div class="anniuzu">
-		<button sy=0>上</button>
+		<button sy=0>转</button>
 		<button sy=1>下</button>
 		<button sy=2>左</button>
 		<button sy=3>右</button>
@@ -50,20 +61,23 @@
 			3:{row:1,col:2}
 		}]
 		//当前使用的模型
-		var currentModel={}//出错时把var去掉换成全局变量
+		var currentModel={};//出错时把var去掉换成全局变量
 		//标记16宫格的位置
 		var currentX=0,currentY=0;
-
 		//当body加载完成后加载这个函数，主函数：入口
 		function init(){
+			onKeyDown();
 			createModel();
-			document.onkeyup=keyboard;
+			//document.onkeyup=keyboard;
 
 		}
 		//根据模型的数据源来创建对应的块元素
 		function createModel(){
 			//确定使用当前哪一个模型
 			currentModel=MODELS[0];
+			//重新初始化16宫格的位置
+			currentX=0;
+			currentY=0;
 			//生成对应数量的块元素
 			for(var  key in currentModel){
 				var divEle=document.createElement("div");
@@ -73,6 +87,7 @@
 			locationBlocks();
 		}
 		function locationBlocks(){
+			checkBound();
 			//拿到所有的块元素，
 			var eles= document.getElementsByClassName("mode1");
 			for(var i=0;i<eles.length;i++){
@@ -85,16 +100,26 @@
 			//找到每个块元素对应的数据，根据每个块元素对应的数据来制定块元素的位置
 		}
 		//监听用户键盘事件
-		function keyboard(eve){
-			//console.log(eve.key);
-			//console.log(eve.keyCode); 
-			switch(eve.keyCode){
-				case 38:console.log("上"); move(0,-1); break;
+		//function keyboard(eve){
+			 
+			//switch(eve.keyCode){
+				//case 38:console.log("旋转"); rotate(); break;
+				//case 39:console.log("右"); move(1,0); break;
+				//case 40:console.log("下"); move(0,1); break;
+				//case 37:console.log("左"); move(-1,0); break;
+			//}
+
+		//}
+		//键盘按下事件
+		function onKeyDown(){
+			document.onkeydown=function(event){
+				switch(event.keyCode){
+				case 38:console.log("旋转"); rotate(); break;
 				case 39:console.log("右"); move(1,0); break;
 				case 40:console.log("下"); move(0,1); break;
 				case 37:console.log("左"); move(-1,0); break;
 			}
-
+			}
 		}
 		//按钮控制移动
 		var dianj=document.querySelector(".anniuzu").querySelectorAll("button");
@@ -102,7 +127,7 @@
 			dianj[i].onclick=function(){
 			var ss=parseInt(this.getAttribute("sy"));
 			switch(ss){
-				case 0: move(0,-1); break;
+				case 0: rotate(); break;
 				case 1: move(0,1); break;
 				case 2: move(-1,0); break;
 				case 3: move(1,0); break;
@@ -121,7 +146,72 @@
 			locationBlocks();
 
 		}
+		//旋转模型
+		function rotate(){
+			//x=上一行的y,y=上一行的3-x
 
+			//遍历我们的的模型数据源
+			for( var key in currentModel){
+				//块元素的数据源
+				var blockMode1=currentModel[key];
+				//实现我们的算法
+				var temp=blockMode1.row;
+				blockMode1.row=blockMode1.col;
+				blockMode1.col=3 - temp;
+
+			}
+			locationBlocks();
+		}
+		//控制模型只能在容器中移动
+		function checkBound(){
+			//定义模型可以活动的边界
+			var leftBound=0,
+				rightBound=COL,
+				bottomBound=ROW;
+			//当模型中有一个块元素超出了边界之后，让16宫格回退
+			for(var key in currentModel){
+				var blockMode1 = currentModel[key];
+				//左侧越界
+				if((blockMode1.col+currentX)<leftBound){
+					currentX++;
+				}
+				//右侧越界
+				if((blockMode1.col+currentX)>=rightBound){
+					currentX--;
+				}
+				//下面越界
+				if((blockMode1.row+currentY)>=bottomBound){
+					currentY--;
+					fixedBottomModel();
+				}
+			}
+
+		}
+		//自己加的一个随机掉落
+		function rotate2(){
+			//x=上一行的y,y=上一行的3-x
+			//遍历我们的的模型数据源
+			console.log("aa");
+			var blockMode1=currentModel[0];
+			blockMode1.row=blockMode1.row+1;
+			blockMode1.col=blockMode1.col+1;
+			locationBlocks();
+		}
+			
+		
+		//把模型固定在底部
+		function fixedBottomModel(){
+			var activityModelEles=document.getElementsByClassName("mode1");
+			//rotate2();
+			for(var i=activityModelEles.length-1;i>=0;i--){
+				//拿到每个块元素
+				var activityModelEle=activityModelEles[i];
+				activityModelEle.className="mode2";
+			}
+			//创建新的模型
+			createModel()
+			
+		}
 	</script>
 </body>
 </html>
