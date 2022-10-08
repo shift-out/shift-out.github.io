@@ -319,8 +319,11 @@
 			downLine(line);
 			fenshu+=10;
 			p.innerHTML="您的分数为："+fenshu;
-			if(fenshu=10){
-				alert("恭喜你，口令红包为：''记得要先写￥再写后面的数字");
+			if(fenshu==80){
+				alert("恭喜你，获得支付宝口令红包：'30378498'点击确定继续得分吧");
+			}
+			if(fenshu==260){
+				alert("恭喜你，通关了获得第二档5元红包，先到先得数量有限：86490198");
 			}
 		}
 		//清理后元素下落
@@ -337,7 +340,7 @@
 		function autoDown(){
 			if(mInterval){
 				clearInterval(mInterval);
-			}
+			 }
 			mInterval= setInterval(function(){
 				move(0,1)
 			},600)
