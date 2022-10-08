@@ -14,10 +14,6 @@
 			background-color: #999;
 			position: relative;
 		}
-		.anniuzu{
-			width: 360px;
-			
-		}
 		.mode1{
 			width: 30px;
 			height: 30px;
@@ -26,8 +22,11 @@
 			box-sizing: border-box;
 			position: absolute;
 		}
-		p{
-			font-size: 20px;
+		.anniuzu{
+			width: 380px;
+		
+
+			
 		}
 		.anniuzu button{
 			width: 60px;
@@ -44,6 +43,9 @@
 			position: absolute;
 
 		}
+		p{
+			font-size: 20px;
+		}
 	</style>
 </head>
 <body onload="init()">
@@ -55,7 +57,7 @@
 		<button sy=1>下</button>
 		<button sy=2>左</button>
 		<button sy=3>右</button>
-		<button class="shuax">重新来过</button>
+		<button class="shuax">重来</button>
 	</div>
 	<p class="fens">分数显示</p>
 	<script>
@@ -310,7 +312,10 @@
 			}
 			downLine(line);
 			fenshu+=10;
-			p.innerHTML=fenshu;
+			p.innerHTML="您的分数为："+fenshu;
+			if(fenshu=10){
+				alert("恭喜你，口令红包为：''记得要先写￥再写后面的数字");
+			}
 		}
 		//清理后元素下落
 		function downLine(line){
