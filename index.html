@@ -4,7 +4,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-	<script src=""></script>
+	
+    <script src="./lodash.min.js"></script>
 	<title>Document</title>
 	<style>
 		.container{
@@ -97,7 +98,7 @@
 			0:{row:0,col:0},
 			1:{row:0,col:1},
 			2:{row:0,col:2},
-			3:{row:0,col:2}
+			3:{row:0,col:3}
 		},
 		{
 			0:{row:1,col:1},
@@ -128,7 +129,7 @@
 			}
 			//确定使用当前哪一个模型
 
-			currentModel=MODELS[Math.floor(Math.random()*5)];
+			currentModel=MODELS[3];
 			//重新初始化16宫格的位置
 			currentX=0;
 			currentY=0;
@@ -210,17 +211,22 @@
 		//旋转模型
 		function rotate(){
 			//x=上一行的y,y=上一行的3-x
-
+			var cloneCurrentModel = _.cloneDeep(currentModel);
 			//遍历我们的的模型数据源
-			for( var key in currentModel){
+			for( var key in cloneCurrentModel){
 				//块元素的数据源
-				var blockMode1=currentModel[key];
+				var blockMode1=cloneCurrentModel[key];
 				//实现我们的算法
 				var temp=blockMode1.row;
 				blockMode1.row=blockMode1.col;
 				blockMode1.col=3 - temp;
 
 			}
+			if (isMeet(currentX, currentY, cloneCurrentModel)) {
+            return;
+        }
+
+        currentModel = cloneCurrentModel;
 			locationBlocks();
 		}
 		//控制模型只能在容器中移动
