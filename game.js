@@ -47,9 +47,6 @@
   const finalScoreEl = document.getElementById("finalScore");
   const finalMaxComboEl = document.getElementById("finalMaxCombo");
   const finalMaxRiskEl = document.getElementById("finalMaxRisk");
-  const playerNameInput = document.getElementById("playerName");
-  const scoreSubmitForm = document.getElementById("scoreSubmitForm");
-  const submitScoreButton = document.getElementById("submitScoreButton");
   const scoreSubmitStatus = document.getElementById("scoreSubmitStatus");
   const leaderboardButton = document.getElementById("leaderboardButton");
   const previewLeaderboardButton = document.getElementById("previewLeaderboardButton");
@@ -236,6 +233,13 @@
       .slice(0, 16);
   }
 
+  function getPlayerDisplayName() {
+    const savedName = normalizePlayerName(localStorage.getItem(PLAYER_NAME_STORAGE_KEY));
+    if (savedName) return savedName;
+    const suffix = state.playerId.replace(/[^a-zA-Z0-9]/g, "").slice(-4).toUpperCase();
+    return `玩家-${suffix || "0000"}`;
+  }
+
   function localLeaderboardKey(mode) {
     return `${LEADERBOARD_STORAGE_PREFIX}:${mode}`;
   }
@@ -363,22 +367,14 @@
 
   async function submitCurrentScore() {
     if (state.scoreSubmitted) return;
-    const name = normalizePlayerName(playerNameInput.value);
-    if (!name) {
-      scoreSubmitStatus.textContent = "请输入 1–16 个字符的昵称。";
-      playerNameInput.focus();
-      return;
-    }
-
+    const name = getPlayerDisplayName();
+    state.scoreSubmitted = true;
     localStorage.setItem(PLAYER_NAME_STORAGE_KEY, name);
     saveLocalLeaderboardScore(state.dropMode, name, state.score);
-    submitScoreButton.disabled = true;
-    scoreSubmitStatus.textContent = "正在提交…";
+    scoreSubmitStatus.textContent = "成绩已保存，正在同步在线排行榜…";
 
     if (!LEADERBOARD_API_URL) {
-      state.scoreSubmitted = true;
-      submitScoreButton.textContent = "已保存";
-      scoreSubmitStatus.textContent = "成绩已保存到本机排行榜。";
+      scoreSubmitStatus.textContent = `已自动保存 · ${name}`;
       await refreshLeaderboard(state.dropMode);
       return;
     }
@@ -400,15 +396,14 @@
       window.clearTimeout(timeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      state.scoreSubmitted = true;
-      submitScoreButton.textContent = "已提交";
       scoreSubmitStatus.textContent = payload.rank
-        ? `提交成功，当前第 ${payload.rank} 名。`
-        : "提交成功。";
+        ? `已自动提交 · ${name} · 第 ${payload.rank} 名`
+        : `已自动提交 · ${name}`;
       await refreshLeaderboard(state.dropMode);
     } catch {
-      submitScoreButton.disabled = false;
-      scoreSubmitStatus.textContent = "在线提交失败，但本机成绩已保存。";
+      scoreSubmitStatus.textContent = `在线服务暂不可用 · 已保存到本机 · ${name}`;
+      state.leaderboardRows = readLocalLeaderboard(state.dropMode);
+      renderLeaderboard();
     }
   }
 
@@ -995,10 +990,7 @@
     startOverlay.classList.remove("is-visible");
     pauseOverlay.classList.remove("is-visible");
     gameOverOverlay.classList.remove("is-visible");
-    submitScoreButton.disabled = false;
-    submitScoreButton.textContent = "提交分数";
-    scoreSubmitStatus.textContent = "";
-    playerNameInput.value = localStorage.getItem(PLAYER_NAME_STORAGE_KEY) || "";
+    scoreSubmitStatus.textContent = "游戏结束后将自动保存并提交成绩";
     updateStats();
     drawHold();
     spawnPiece();
@@ -1017,10 +1009,7 @@
     finalMaxComboEl.textContent = formatNumber(state.maxCombo);
     finalMaxRiskEl.textContent = `×${state.maxRiskMultiplier.toFixed(2)}`;
     state.scoreSubmitted = false;
-    playerNameInput.value = localStorage.getItem(PLAYER_NAME_STORAGE_KEY) || "";
-    submitScoreButton.disabled = false;
-    submitScoreButton.textContent = "提交分数";
-    scoreSubmitStatus.textContent = "";
+    scoreSubmitStatus.textContent = "正在自动保存成绩…";
     if (state.score > state.highScore) state.highScore = state.score;
     localStorage.setItem(currentHighScoreKey(), String(state.highScore));
     updateStats();
@@ -1028,7 +1017,7 @@
     stopMusic();
     gameOverOverlay.classList.add("is-visible");
     playSound("gameover");
-    refreshLeaderboard(state.dropMode);
+    void submitCurrentScore();
   }
 
   function togglePause() {
@@ -1531,7 +1520,7 @@
   function ensureMusicGain(audio) {
     if (!state.musicGain) {
       state.musicGain = audio.createGain();
-      state.musicGain.gain.value = 0.12;
+      state.musicGain.gain.value = 0.65;
       state.musicGain.connect(audio.destination);
     }
     return state.musicGain;
@@ -1565,11 +1554,11 @@
     const leadNotes = [220, 261.63, 329.63, 392, 329.63, 261.63, 196, 220];
     const step = state.musicStep % 8;
     if (step % 2 === 0) {
-      scheduleMusicTone(bassNotes[step], 0.34, "triangle", 0.045);
+      scheduleMusicTone(bassNotes[step], 0.34, "triangle", 0.075);
     }
-    scheduleMusicTone(leadNotes[step], 0.13, "square", 0.012);
+    scheduleMusicTone(leadNotes[step], 0.13, "square", 0.032);
     if (step === 3 || step === 7) {
-      scheduleMusicTone(leadNotes[(step + 2) % 8] * 2, 0.09, "sine", 0.006, 0.1);
+      scheduleMusicTone(leadNotes[(step + 2) % 8] * 2, 0.09, "sine", 0.015, 0.1);
     }
     state.musicStep += 1;
   }
@@ -1886,10 +1875,6 @@
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => setDropMode(button.dataset.dropMode));
   });
-  scoreSubmitForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    submitCurrentScore();
-  });
   leaderboardButton.addEventListener("click", () => openLeaderboard(state.dropMode));
   previewLeaderboardButton.addEventListener("click", () => openLeaderboard(state.dropMode));
   closeLeaderboardButton.addEventListener("click", closeLeaderboard);
@@ -1901,7 +1886,6 @@
   });
 
   state.playerId = getOrCreatePlayerId();
-  playerNameInput.value = localStorage.getItem(PLAYER_NAME_STORAGE_KEY) || "";
   updateSoundButton();
   updateModePicker();
   updateStats();

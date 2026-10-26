@@ -139,14 +139,9 @@
                   <strong id="finalMaxRisk">×1.00</strong>
                 </div>
               </div>
-              <form class="score-submit" id="scoreSubmitForm">
-                <label for="playerName">排行榜昵称</label>
-                <div class="score-submit-row">
-                  <input id="playerName" type="text" maxlength="16" autocomplete="nickname" placeholder="输入昵称" />
-                  <button id="submitScoreButton" type="submit">提交分数</button>
-                </div>
-                <p id="scoreSubmitStatus" class="score-submit-status"></p>
-              </form>
+              <p class="auto-submit-status" id="scoreSubmitStatus" aria-live="polite">
+                游戏结束后将自动保存并提交成绩
+              </p>
               <button class="primary-button" id="playAgainButton" type="button">
                 再来一局
                 <span>R</span>
