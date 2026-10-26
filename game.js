@@ -1546,7 +1546,7 @@
   function ensureMusicGain(audio) {
     if (!state.musicGain) {
       state.musicGain = audio.createGain();
-      state.musicGain.gain.value = 0.65;
+      state.musicGain.gain.value = 6.5;
       state.musicGain.connect(audio.destination);
     }
     return state.musicGain;
