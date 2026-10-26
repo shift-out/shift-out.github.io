@@ -6,15 +6,8 @@
 
 直接打开 `index.html`，或在项目目录启动任意静态文件服务器。
 
-## 排行榜 API
+## 排行榜
 
-排行榜后端位于 `api/`，使用 Cloudflare Workers 和 D1：
-
-```bash
-cd api
-npm install
-npx wrangler deploy
-npx wrangler d1 execute neon-blocks-leaderboard --remote --file=./schema.sql
-```
-
-前端在线地址配置在 `config.js`。在线服务不可访问时，游戏会自动使用本机排行榜。
+排行榜使用 Supabase 的公开只读表和 `submit_score` 数据库函数。前端配置位于
+`config.js`，数据库结构位于 `supabase/schema.sql`。在线服务不可访问时，游戏会
+自动使用本机排行榜。

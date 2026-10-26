@@ -16,7 +16,8 @@
   const LEADERBOARD_STORAGE_PREFIX = "neonBlocksLeaderboard";
   const PLAYER_ID_STORAGE_KEY = "neonBlocksPlayerId";
   const PLAYER_NAME_STORAGE_KEY = "neonBlocksPlayerName";
-  const LEADERBOARD_API_URL = window.NEON_LEADERBOARD_URL || "";
+  const SUPABASE_URL = window.NEON_SUPABASE_URL || "";
+  const SUPABASE_ANON_KEY = window.NEON_SUPABASE_ANON_KEY || "";
   const MODE_SCORE_MULTIPLIERS = {
     standard: 1,
     strict: 1.25,
@@ -44,6 +45,10 @@
   const riskMultiplierEl = document.getElementById("riskMultiplier");
   const levelEl = document.getElementById("level");
   const linesEl = document.getElementById("lines");
+  const mobileScoreEl = document.getElementById("mobileScore");
+  const mobileHighScoreEl = document.getElementById("mobileHighScore");
+  const mobileLevelEl = document.getElementById("mobileLevel");
+  const mobileRiskEl = document.getElementById("mobileRisk");
   const finalScoreEl = document.getElementById("finalScore");
   const finalMaxComboEl = document.getElementById("finalMaxCombo");
   const finalMaxRiskEl = document.getElementById("finalMaxRisk");
@@ -334,7 +339,7 @@
     state.leaderboardLoading = true;
     leaderboardStatusEl.textContent = "正在读取排行榜…";
 
-    if (!LEADERBOARD_API_URL) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       state.leaderboardRows = readLocalLeaderboard(mode);
       state.leaderboardLoading = false;
       renderLeaderboard();
@@ -346,12 +351,25 @@
     const timeout = window.setTimeout(() => controller.abort(), 3500);
     try {
       const response = await fetch(
-        `${LEADERBOARD_API_URL}/scores?mode=${encodeURIComponent(mode)}`,
-        { signal: controller.signal },
+        `${SUPABASE_URL}/rest/v1/leaderboard_scores?select=player_id,name,score,updated_at&mode=eq.${encodeURIComponent(mode)}&order=score.desc,updated_at.asc&limit=10`,
+        {
+          signal: controller.signal,
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+        },
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      state.leaderboardRows = Array.isArray(payload.scores) ? payload.scores : [];
+      state.leaderboardRows = Array.isArray(payload)
+        ? payload.map((row) => ({
+            playerId: row.player_id,
+            name: row.name,
+            score: Number(row.score),
+            updatedAt: new Date(row.updated_at).getTime(),
+          }))
+        : [];
       state.leaderboardLoading = false;
       renderLeaderboard();
       leaderboardStatusEl.textContent = "全球排行榜 · 每次更新显示前 10 名";
@@ -373,7 +391,7 @@
     saveLocalLeaderboardScore(state.dropMode, name, state.score);
     scoreSubmitStatus.textContent = "成绩已保存，正在同步在线排行榜…";
 
-    if (!LEADERBOARD_API_URL) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       scoreSubmitStatus.textContent = `已自动保存 · ${name}`;
       await refreshLeaderboard(state.dropMode);
       return;
@@ -382,22 +400,26 @@
     try {
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 3500);
-      const response = await fetch(`${LEADERBOARD_API_URL}/scores`, {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_score`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "content-type": "application/json",
+        },
         signal: controller.signal,
         body: JSON.stringify({
-          mode: state.dropMode,
-          playerId: state.playerId,
-          name,
-          score: state.score,
+          p_mode: state.dropMode,
+          p_player_id: state.playerId,
+          p_name: name,
+          p_score: state.score,
         }),
       });
       window.clearTimeout(timeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
-      scoreSubmitStatus.textContent = payload.rank
-        ? `已自动提交 · ${name} · 第 ${payload.rank} 名`
+      const rank = await response.json();
+      scoreSubmitStatus.textContent = rank
+        ? `已自动提交 · ${name} · 第 ${rank} 名`
         : `已自动提交 · ${name}`;
       await refreshLeaderboard(state.dropMode);
     } catch {
@@ -1501,6 +1523,10 @@
     riskMultiplierEl.textContent = `×${state.riskMultiplier.toFixed(2)}`;
     levelEl.textContent = formatNumber(state.level);
     linesEl.textContent = formatNumber(state.lines);
+    mobileScoreEl.textContent = formatNumber(state.score);
+    mobileHighScoreEl.textContent = formatNumber(state.highScore);
+    mobileLevelEl.textContent = formatNumber(state.level);
+    mobileRiskEl.textContent = `×${state.riskMultiplier.toFixed(2)}`;
     boardFrame.classList.toggle("is-danger", state.riskMultiplier >= 1.24);
     boardFrame.classList.toggle("is-critical", state.riskMultiplier >= 1.6);
   }

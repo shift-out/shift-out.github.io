@@ -106,6 +106,10 @@ button:focus-visible {
   gap: 8px;
 }
 
+.mobile-hud {
+  display: none;
+}
+
 .eyebrow {
   margin: 0 0 2px;
   color: var(--cyan);
@@ -965,13 +969,54 @@ footer p {
 }
 
 @media (max-width: 720px) {
+  body {
+    padding-bottom: 84px;
+  }
+
   .game-shell {
     width: min(100% - 20px, 500px);
-    padding-top: 16px;
+    padding-top: 8px;
+    padding-bottom: 10px;
   }
 
   .topbar {
     width: min(100%, 440px);
+    margin-bottom: 8px;
+  }
+
+  .mobile-hud {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    width: min(100%, 440px);
+    margin: 0 auto 8px;
+    padding: 7px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(10, 17, 32, 0.82);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-hud > div {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .mobile-hud span {
+    color: var(--muted);
+    font-size: 0.48rem;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+  }
+
+  .mobile-hud strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
   }
 
   .game-layout {
@@ -984,6 +1029,11 @@ footer p {
 
   .board-wrap {
     grid-area: board;
+  }
+
+  .board-frame {
+    width: clamp(190px, calc((100svh - 230px) / 2), 100%);
+    margin: 0 auto;
   }
 
   .left-panel {
@@ -1025,14 +1075,35 @@ footer p {
 
   .mobile-controls {
     display: grid;
+    position: fixed;
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 8px;
+    z-index: 15;
+    width: min(calc(100% - 16px), 470px);
+    margin: 0 auto;
+    padding: 6px;
+    border: 1px solid rgba(126, 152, 220, 0.2);
+    border-radius: 16px;
+    background: rgba(8, 14, 28, 0.9);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.44);
+    backdrop-filter: blur(18px);
   }
 
   .touch-hint {
-    display: block;
+    display: none;
   }
 
   footer {
-    width: 100%;
+    display: none;
+  }
+
+  .leaderboard-preview {
+    display: none;
+  }
+
+  .mobile-controls button {
+    min-height: 48px;
   }
 }
 
@@ -1123,13 +1194,13 @@ footer p {
   }
 
   .mobile-controls button {
-    min-height: 46px;
+    min-height: 50px;
     padding: 10px;
     border-radius: 12px;
   }
 
-  footer {
-    margin-top: 8px;
+  .mobile-hud {
+    width: 100%;
   }
 
   .leaderboard-preview {
