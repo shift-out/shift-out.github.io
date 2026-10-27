@@ -25,19 +25,23 @@ create policy "leaderboard public read"
 revoke all on public.leaderboard_scores from anon;
 grant select on public.leaderboard_scores to anon;
 
+drop function if exists public.submit_score(text, text, text, bigint);
+
 create or replace function public.submit_score(
   p_mode text,
   p_player_id text,
   p_name text,
   p_score bigint
 )
-returns integer
+returns jsonb
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
-  result_rank integer;
+  run_rank integer;
+  best_rank integer;
+  best_score bigint;
 begin
   if p_mode not in ('standard', 'strict') then
     raise exception 'invalid mode';
@@ -68,17 +72,27 @@ begin
       else public.leaderboard_scores.updated_at
     end;
 
-  select ranked.position into result_rank
-  from (
-    select
-      player_id,
-      row_number() over (order by score desc, updated_at asc) as position
-    from public.leaderboard_scores
-    where mode = p_mode
-  ) ranked
-  where ranked.player_id = p_player_id;
+  select score into best_score
+  from public.leaderboard_scores
+  where mode = p_mode and player_id = p_player_id;
 
-  return result_rank;
+  select 1 + count(*) into run_rank
+  from public.leaderboard_scores
+  where mode = p_mode
+    and player_id <> p_player_id
+    and score > p_score;
+
+  select 1 + count(*) into best_rank
+  from public.leaderboard_scores
+  where mode = p_mode
+    and player_id <> p_player_id
+    and score > best_score;
+
+  return jsonb_build_object(
+    'runRank', run_rank,
+    'bestRank', best_rank,
+    'bestScore', best_score
+  );
 end;
 $$;
 

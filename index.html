@@ -2,12 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0b1020" />
     <title>NEON BLOCKS · 俄罗斯方块</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <canvas id="spaceCanvas" class="space-canvas" aria-hidden="true"></canvas>
     <div class="ambient ambient-one" aria-hidden="true"></div>
     <div class="ambient ambient-two" aria-hidden="true"></div>
 
@@ -18,6 +19,16 @@
           <h1>俄罗斯方块</h1>
         </div>
         <div class="top-actions">
+          <button class="icon-button" id="pauseButton" type="button" aria-label="暂停游戏" title="暂停">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z" />
+            </svg>
+          </button>
+          <button class="icon-button" id="rulesButton" type="button" aria-label="查看游戏规则" title="规则说明">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M11 17h2v-2h-2v2Zm1-14a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 16a7 7 0 1 1 0-14 7 7 0 0 1 0 14Zm0-12a3 3 0 0 0-3 3h2a1 1 0 1 1 1.6.8l-.6.45A2.4 2.4 0 0 0 10.8 14H13v-.5l.85-.64A2.99 2.99 0 0 0 12 7Z" />
+            </svg>
+          </button>
           <button class="icon-button" id="leaderboardButton" type="button" aria-label="打开排行榜" title="排行榜">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M6 3h12v3h3v3c0 2.43-1.73 4.46-4.03 4.91A5.99 5.99 0 0 1 13 17.91V20h4v2H7v-2h4v-2.09A5.99 5.99 0 0 1 7.03 13.91C4.73 13.46 3 11.43 3 9V6h3V3Zm0 5H5v1c0 1.14.64 2.13 1.58 2.63A6.28 6.28 0 0 1 6 9V8Zm12 0v1c0 .93-.21 1.8-.58 2.63A2.99 2.99 0 0 0 19 9V8h-1Z" />
@@ -139,6 +150,7 @@
                 <span>P</span>
               </button>
               <button class="text-button" id="restartFromPause" type="button">重新开始</button>
+              <button class="text-button" id="homeFromPause" type="button">回到主页面</button>
             </div>
 
             <div class="overlay" id="gameOverOverlay">
@@ -148,23 +160,42 @@
                 <span>本局得分</span>
                 <strong id="finalScore">0</strong>
               </div>
-              <div class="result-overview">
-                <div>
+              <div class="result-stats">
+                <div class="result-stat">
                   <span>最高连击</span>
                   <strong id="finalMaxCombo">0</strong>
                 </div>
-                <div>
+                <div class="result-stat">
                   <span>最高风险</span>
                   <strong id="finalMaxRisk">×1.00</strong>
                 </div>
               </div>
+              <section class="result-rank-section">
+                <div class="result-rank-pair">
+                  <div>
+                    <span>本局排名</span>
+                    <strong id="finalRank">--</strong>
+                  </div>
+                  <div>
+                    <span>个人最高</span>
+                    <strong id="finalBestRank">--</strong>
+                  </div>
+                </div>
+                <button id="resultLeaderboardButton" type="button">查看完整排行榜</button>
+              </section>
               <p class="auto-submit-status" id="scoreSubmitStatus" aria-live="polite">
                 游戏结束后将自动保存并提交成绩
               </p>
-              <button class="primary-button" id="playAgainButton" type="button">
-                再来一局
-                <span>R</span>
-              </button>
+              <div class="result-actions">
+                <button class="primary-button rematch-button" id="rematchButton" type="button">
+                  再来一局
+                  <span>R</span>
+                </button>
+                <button class="primary-button" id="playAgainButton" type="button">
+                  选择难度再战
+                  <span>R</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -196,15 +227,24 @@
               <div><span>暂停</span><kbd>P</kbd></div>
             </div>
           </section>
+
+          <section class="mobile-utility">
+            <button class="mobile-hold-panel" id="mobileHoldButton" data-action="hold" type="button">
+              <span class="mobile-hold-title">暂存</span>
+              <canvas id="mobileHoldCanvas" width="288" height="300" aria-label="手机暂存的方块"></canvas>
+              <span id="mobileHoldType" hidden>空</span>
+            </button>
+            <div class="next-level-card">
+              <span id="mobileModeLabel">标准模式</span>
+              <strong id="nextLevelRemaining">10 行升级</strong>
+            </div>
+          </section>
         </aside>
       </section>
 
       <section class="mobile-controls" aria-label="触屏操作">
         <button data-action="left" type="button" aria-label="向左移动">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7V5Z" /></svg>
-        </button>
-        <button data-action="hardDrop" type="button" aria-label="直接落底">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 9 7 7 7-7H5Z" /></svg>
         </button>
         <button data-action="rotate" class="accent-control" type="button" aria-label="旋转">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.68 4.22 1.78L13 11h7V4l-2.35 2.35Z" /></svg>
@@ -222,6 +262,39 @@
         <button class="text-button" id="restartButton" type="button">重新开始</button>
       </footer>
     </main>
+
+    <button class="audio-debug-toggle" id="audioDebugToggle" type="button" aria-label="打开音频调试" hidden disabled>
+      调音
+    </button>
+    <aside class="audio-debug-panel" id="audioDebugPanel" hidden aria-label="音频调试">
+      <header>
+        <strong>音频调试</strong>
+        <button id="closeAudioDebug" type="button" aria-label="关闭音频调试">×</button>
+      </header>
+      <label for="musicVolumeSlider">
+        <span>背景音乐音量</span>
+        <output id="musicVolumeValue">100</output>
+      </label>
+      <input id="musicVolumeSlider" type="range" min="1" max="20000" step="1" value="100" />
+      <button class="audio-preview-button" id="previewMusicButton" type="button">试听当前背景音乐</button>
+      <label for="buttonVolumeSlider">
+        <span>按钮按下音量</span>
+        <output id="buttonVolumeValue">100</output>
+      </label>
+      <input id="buttonVolumeSlider" type="range" min="1" max="20000" step="1" value="100" />
+      <button class="audio-preview-button" id="previewButtonSound" type="button">试听按钮音</button>
+      <label for="musicPreset">
+        <span>背景音乐风格</span>
+      </label>
+      <select id="musicPreset">
+        <option value="deepSpace">深空漫游</option>
+        <option value="soft">柔和星夜</option>
+        <option value="crystal">晶光旋律</option>
+        <option value="drift">低音漫游</option>
+      </select>
+      <div class="sound-control-list" id="soundControlList"></div>
+      <p>调试值会自动保存在当前浏览器。</p>
+    </aside>
 
     <div class="leaderboard-modal" id="leaderboardModal" hidden>
       <section class="leaderboard-card" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle">
@@ -242,6 +315,44 @@
         </div>
         <ol class="leaderboard-list" id="leaderboardList"></ol>
         <p class="leaderboard-status" id="leaderboardStatus">正在读取排行榜…</p>
+      </section>
+    </div>
+
+    <div class="leaderboard-modal" id="rulesModal" hidden>
+      <section class="leaderboard-card rules-card" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+        <header>
+          <div>
+            <p class="overlay-kicker">HOW TO PLAY</p>
+            <h2 id="rulesTitle">规则与加成</h2>
+          </div>
+          <button class="icon-button" id="closeRulesButton" type="button" aria-label="关闭规则">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z" />
+            </svg>
+          </button>
+        </header>
+        <div class="rules-list">
+          <article>
+            <strong>等级</strong>
+            <p>每消除 10 行提升一级。等级越高，方块自动下落越快，同时消行基础分按等级放大。</p>
+          </article>
+          <article>
+            <strong>风险倍率</strong>
+            <p>根据棋盘空洞和最高堆叠计算，最高 ×1.80。风险越高，成功消行获得的分数越高。</p>
+          </article>
+          <article>
+            <strong>连击</strong>
+            <p>连续多次消行会继续提高得分倍率；没有消行时连击重置。</p>
+          </article>
+          <article>
+            <strong>标准 / 严格</strong>
+            <p>严格模式会阻止填入已有空洞，并额外获得 1.25 倍分数。两种模式使用独立排行榜。</p>
+          </article>
+          <article>
+            <strong>手机操作</strong>
+            <p>点击棋盘或上滑可旋转；左右滑动移动方块；向下滑动直接落底。底部按钮也可以完成相同操作。</p>
+          </article>
+        </div>
       </section>
     </div>
 
