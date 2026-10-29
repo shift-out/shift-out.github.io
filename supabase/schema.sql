@@ -42,6 +42,7 @@ declare
   run_rank integer;
   best_rank integer;
   best_score bigint;
+  previous_best bigint;
 begin
   if p_mode not in ('standard', 'strict') then
     raise exception 'invalid mode';
@@ -58,6 +59,30 @@ begin
     raise exception 'invalid score';
   end if;
 
+  perform pg_advisory_xact_lock(hashtext('leaderboard_scores:' || p_mode));
+
+  -- Repair any oversized legacy leaderboard before calculating the new rank.
+  with ranked as (
+    select
+      id,
+      row_number() over (
+        partition by mode
+        order by score desc, updated_at asc, id asc
+      ) as place
+    from public.leaderboard_scores
+    where mode = p_mode
+  )
+  delete from public.leaderboard_scores as scores
+  using ranked
+  where scores.id = ranked.id
+    and ranked.place > 100;
+
+  select score into previous_best
+  from public.leaderboard_scores
+  where mode = p_mode and player_id = p_player_id;
+
+  best_score := greatest(coalesce(previous_best, 0), p_score);
+
   insert into public.leaderboard_scores (mode, player_id, name, score, updated_at)
   values (p_mode, p_player_id, trim(p_name), p_score, now())
   on conflict (mode, player_id) do update
@@ -72,21 +97,42 @@ begin
       else public.leaderboard_scores.updated_at
     end;
 
-  select score into best_score
-  from public.leaderboard_scores
-  where mode = p_mode and player_id = p_player_id;
+  -- Keep each mode to the best 100 player records after every run.
+  with ranked as (
+    select
+      id,
+      row_number() over (
+        partition by mode
+        order by score desc, updated_at asc, id asc
+      ) as place
+    from public.leaderboard_scores
+    where mode = p_mode
+  )
+  delete from public.leaderboard_scores as scores
+  using ranked
+  where scores.id = ranked.id
+    and ranked.place > 100;
 
   select 1 + count(*) into run_rank
   from public.leaderboard_scores
   where mode = p_mode
-    and player_id <> p_player_id
     and score > p_score;
 
   select 1 + count(*) into best_rank
   from public.leaderboard_scores
   where mode = p_mode
-    and player_id <> p_player_id
     and score > best_score;
+
+  if not exists (
+    select 1
+    from public.leaderboard_scores
+    where mode = p_mode and player_id = p_player_id
+  ) then
+    run_rank := null;
+    best_rank := null;
+  elsif run_rank > 100 then
+    run_rank := null;
+  end if;
 
   return jsonb_build_object(
     'runRank', run_rank,

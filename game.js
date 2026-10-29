@@ -22,6 +22,7 @@
   const SOUND_VOLUMES_STORAGE_KEY = "neonBlocksSoundVolumes";
   const AUDIO_DEFAULTS_VERSION_KEY = "neonBlocksAudioDefaultsV4";
   const AUDIO_DEBUG_ENABLED = false;
+  const LEADERBOARD_LIMIT = 100;
   const PLAYER_ID_VERSION = "device-v2-";
   const LOCAL_LEADERBOARD_RESET_KEY = "neonBlocksLeaderboardResetV2";
   const SUPABASE_URL = window.NEON_SUPABASE_URL || "";
@@ -821,7 +822,7 @@
           updatedAt: Number(entry.updatedAt) || 0,
         }))
         .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt)
-        .slice(0, 100);
+        .slice(0, LEADERBOARD_LIMIT);
     } catch {
       return [];
     }
@@ -845,26 +846,31 @@
       });
     }
     rows.sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt);
-    localStorage.setItem(localLeaderboardKey(mode), JSON.stringify(rows.slice(0, 100)));
+    localStorage.setItem(
+      localLeaderboardKey(mode),
+      JSON.stringify(rows.slice(0, LEADERBOARD_LIMIT)),
+    );
   }
 
   function localScoreRanks(mode, score) {
     const rows = readLocalLeaderboard(mode);
     const ownRow = rows.find((entry) => entry.playerId === state.playerId);
     const bestScore = Math.max(score, ownRow?.score || 0);
+    const runRank = 1 + rows.filter((entry) => entry.score > score).length;
     return {
-      runRank:
-        1 +
-        rows.filter(
-          (entry) => entry.playerId !== state.playerId && entry.score > score,
-        ).length,
-      bestRank:
-        1 +
-        rows.filter(
-          (entry) => entry.playerId !== state.playerId && entry.score > bestScore,
-        ).length,
+      runRank: runRank <= LEADERBOARD_LIMIT ? runRank : null,
+      bestRank: ownRow
+        ? 1 + rows.filter((entry) => entry.score > bestScore).length
+        : null,
       bestScore,
     };
+  }
+
+  function formatLeaderboardRank(rank) {
+    const numericRank = Number(rank);
+    return Number.isInteger(numericRank) && numericRank > 0
+      ? `第 ${numericRank} 名`
+      : "未上榜";
   }
 
   function renderLeaderboardRows(rows, target, limit, compact = false) {
@@ -903,7 +909,11 @@
     const modeLabel = state.leaderboardMode === "strict" ? "严格" : "标准";
     previewModeEl.textContent = modeLabel;
     renderLeaderboardRows(state.leaderboardRows, leaderboardPreviewListEl, 3, true);
-    renderLeaderboardRows(state.leaderboardRows, leaderboardListEl, 100);
+    renderLeaderboardRows(
+      state.leaderboardRows,
+      leaderboardListEl,
+      LEADERBOARD_LIMIT,
+    );
     rankingModeButtons.forEach((button) => {
       button.classList.toggle(
         "is-active",
@@ -929,7 +939,7 @@
     const timeout = window.setTimeout(() => controller.abort(), 3500);
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/leaderboard_scores?select=player_id,name,score,updated_at&mode=eq.${encodeURIComponent(mode)}&order=score.desc,updated_at.asc&limit=100`,
+        `${SUPABASE_URL}/rest/v1/leaderboard_scores?select=player_id,name,score,updated_at&mode=eq.${encodeURIComponent(mode)}&order=score.desc,updated_at.asc&limit=${LEADERBOARD_LIMIT}`,
         {
           signal: controller.signal,
           headers: {
@@ -971,8 +981,8 @@
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       const ranks = localScoreRanks(state.dropMode, state.score);
-      finalRankEl.textContent = `第 ${ranks.runRank} 名 · 本机`;
-      finalBestRankEl.textContent = `第 ${ranks.bestRank} 名 · 本机`;
+      finalRankEl.textContent = `${formatLeaderboardRank(ranks.runRank)} · 本机`;
+      finalBestRankEl.textContent = `${formatLeaderboardRank(ranks.bestRank)} · 本机`;
       scoreSubmitStatus.textContent = `已自动保存 · ${name} · 最高分 ${formatNumber(ranks.bestScore)}`;
       await refreshLeaderboard(state.dropMode);
       return;
@@ -999,14 +1009,14 @@
       window.clearTimeout(timeout);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const ranks = await response.json();
-      finalRankEl.textContent = `第 ${ranks.runRank} 名`;
-      finalBestRankEl.textContent = `第 ${ranks.bestRank} 名`;
+      finalRankEl.textContent = formatLeaderboardRank(ranks.runRank);
+      finalBestRankEl.textContent = formatLeaderboardRank(ranks.bestRank);
       scoreSubmitStatus.textContent = `已自动提交 · ${name} · 最高分 ${formatNumber(ranks.bestScore)}`;
       await refreshLeaderboard(state.dropMode);
     } catch {
       const ranks = localScoreRanks(state.dropMode, state.score);
-      finalRankEl.textContent = `第 ${ranks.runRank} 名 · 本机`;
-      finalBestRankEl.textContent = `第 ${ranks.bestRank} 名 · 本机`;
+      finalRankEl.textContent = `${formatLeaderboardRank(ranks.runRank)} · 本机`;
+      finalBestRankEl.textContent = `${formatLeaderboardRank(ranks.bestRank)} · 本机`;
       scoreSubmitStatus.textContent = `在线服务暂不可用 · 已保存到本机 · ${name}`;
       state.leaderboardRows = readLocalLeaderboard(state.dropMode);
       renderLeaderboard();
