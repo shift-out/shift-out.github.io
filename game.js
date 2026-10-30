@@ -350,6 +350,7 @@
     grounded: false,
     lastTime: 0,
     clearedRows: [],
+    clearedRowSnapshot: [],
     effectTime: 0,
     transformEffect: null,
     dropAnimation: null,
@@ -1720,6 +1721,10 @@
 
     if (fullRows.length > 0) {
       state.clearedRows = fullRows;
+      state.clearedRowSnapshot = fullRows.map((row) => ({
+        row,
+        cells: state.board[row].map((type) => type || null),
+      }));
       state.effectTime = 360;
       state.combo += 1;
       state.maxCombo = Math.max(state.maxCombo, state.combo + 1);
@@ -1738,13 +1743,19 @@
       playSound(fullRows.length === 4 ? "tetris" : "clear");
       updateStats();
 
+      const clearedRowSet = new Set(fullRows);
+      const remainingRows = state.board.filter(
+        (_row, index) => !clearedRowSet.has(index),
+      );
+      while (remainingRows.length < ROWS + HIDDEN_ROWS) {
+        remainingRows.unshift(Array(COLS).fill(null));
+      }
+      state.board = remainingRows;
+      state.boardLayerDirty = true;
+
       scheduleGameplay(() => {
-        [...state.clearedRows].sort((a, b) => b - a).forEach((index) => {
-          state.board.splice(index, 1);
-          state.board.unshift(Array(COLS).fill(null));
-        });
-        state.boardLayerDirty = true;
         state.clearedRows = [];
+        state.clearedRowSnapshot = [];
         state.effectTime = 0;
         state.transformEffect = null;
         draw();
@@ -1828,6 +1839,7 @@
     state.lockCounter = 0;
     state.lockResets = 0;
     state.clearedRows = [];
+    state.clearedRowSnapshot = [];
     state.effectTime = 0;
     state.transformEffect = null;
     state.dropAnimation = null;
@@ -1876,6 +1888,7 @@
     state.floatingScores = [];
     state.shakeTime = 0;
     state.clearedRows = [];
+    state.clearedRowSnapshot = [];
     state.effectTime = 0;
     state.transformEffect = null;
     state.dropAnimation = null;
@@ -2217,14 +2230,28 @@
 
   function drawClearEffect(cell, offsetX, offsetY) {
     const progress = 1 - state.effectTime / 360;
+    const fade = Math.max(0, 1 - progress);
     ctx.save();
+    state.clearedRowSnapshot.forEach((snapshot) => {
+      snapshot.cells.forEach((type, x) => {
+        if (!type) return;
+        drawBlockOn(
+          ctx,
+          offsetX + x * cell,
+          offsetY + (snapshot.row - HIDDEN_ROWS) * cell,
+          cell,
+          COLORS[type],
+          fade,
+        );
+      });
+    });
     state.clearedRows.forEach((row) => {
       const y = offsetY + (row - HIDDEN_ROWS) * cell;
       const gradient = ctx.createLinearGradient(offsetX, y, offsetX + COLS * cell, y);
       gradient.addColorStop(0, "rgba(72, 232, 255, 0)");
-      gradient.addColorStop(0.18, `rgba(72, 232, 255, ${0.9 * (1 - progress)})`);
-      gradient.addColorStop(0.5, `rgba(240, 255, 255, ${0.98 * (1 - progress)})`);
-      gradient.addColorStop(0.82, `rgba(72, 232, 255, ${0.9 * (1 - progress)})`);
+      gradient.addColorStop(0.18, `rgba(72, 232, 255, ${0.9 * fade})`);
+      gradient.addColorStop(0.5, `rgba(240, 255, 255, ${0.98 * fade})`);
+      gradient.addColorStop(0.82, `rgba(72, 232, 255, ${0.9 * fade})`);
       gradient.addColorStop(1, "rgba(72, 232, 255, 0)");
       ctx.fillStyle = gradient;
       ctx.shadowColor = "#48e8ff";
