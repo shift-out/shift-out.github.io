@@ -23,6 +23,11 @@
   const AUDIO_DEFAULTS_VERSION_KEY = "neonBlocksAudioDefaultsV4";
   const AUDIO_DEBUG_ENABLED = false;
   const LEADERBOARD_LIMIT = 100;
+  const ONLINE_REQUEST_TIMEOUT_MS = 10000;
+  const ONLINE_REQUEST_RETRIES = 2;
+  const ONLINE_RETRY_DELAY_MS = 500;
+  const ONLINE_LEADERBOARD_CACHE_PREFIX = "neonBlocksOnlineLeaderboardV1";
+  const PENDING_SCORES_STORAGE_KEY = "neonBlocksPendingScoresV1";
   const PLAYER_ID_VERSION = "device-v2-";
   const LOCAL_LEADERBOARD_RESET_KEY = "neonBlocksLeaderboardResetV2";
   const SUPABASE_URL = window.NEON_SUPABASE_URL || "";
@@ -379,6 +384,7 @@
 
   let lastFrameTime = performance.now();
   let resizeFrame = null;
+  let pendingScoreFlushPromise = null;
 
   function createBoard() {
     return Array.from({ length: ROWS + HIDDEN_ROWS }, () => Array(COLS).fill(null));
@@ -809,23 +815,78 @@
     return `${LEADERBOARD_STORAGE_PREFIX}:${mode}`;
   }
 
+  function onlineLeaderboardCacheKey(mode) {
+    return `${ONLINE_LEADERBOARD_CACHE_PREFIX}:${mode}`;
+  }
+
+  function normalizeLeaderboardRows(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload
+      .filter((entry) => entry && Number.isFinite(Number(entry.score)))
+      .map((entry) => ({
+        playerId: String(entry.playerId || entry.player_id || ""),
+        name: normalizePlayerName(entry.name) || "匿名玩家",
+        score: Math.max(0, Math.floor(Number(entry.score))),
+        updatedAt: Number(entry.updatedAt)
+          || new Date(entry.updated_at || 0).getTime()
+          || 0,
+      }))
+      .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt)
+      .slice(0, LEADERBOARD_LIMIT);
+  }
+
   function readLocalLeaderboard(mode) {
     try {
-      const parsed = JSON.parse(localStorage.getItem(localLeaderboardKey(mode)) || "[]");
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter((entry) => entry && Number.isFinite(Number(entry.score)))
-        .map((entry) => ({
-          playerId: String(entry.playerId || ""),
-          name: normalizePlayerName(entry.name) || "匿名玩家",
-          score: Math.max(0, Math.floor(Number(entry.score))),
-          updatedAt: Number(entry.updatedAt) || 0,
-        }))
-        .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt)
-        .slice(0, LEADERBOARD_LIMIT);
+      return normalizeLeaderboardRows(
+        JSON.parse(localStorage.getItem(localLeaderboardKey(mode)) || "[]"),
+      );
     } catch {
       return [];
     }
+  }
+
+  function readCachedOnlineLeaderboard(mode) {
+    try {
+      return normalizeLeaderboardRows(
+        JSON.parse(
+          localStorage.getItem(onlineLeaderboardCacheKey(mode)) || "[]",
+        ),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  function saveCachedOnlineLeaderboard(mode, rows) {
+    localStorage.setItem(
+      onlineLeaderboardCacheKey(mode),
+      JSON.stringify(normalizeLeaderboardRows(rows)),
+    );
+  }
+
+  function mergeLeaderboardRows(...groups) {
+    const merged = new Map();
+    groups.flat().forEach((entry) => {
+      const key = entry.playerId || `${entry.name}:${entry.updatedAt}`;
+      const existing = merged.get(key);
+      if (
+        !existing
+        || entry.score > existing.score
+        || (entry.score === existing.score && entry.updatedAt >= existing.updatedAt)
+      ) {
+        merged.set(key, entry);
+      }
+    });
+    return [...merged.values()]
+      .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt)
+      .slice(0, LEADERBOARD_LIMIT);
+  }
+
+  function fallbackLeaderboardRows(mode) {
+    return mergeLeaderboardRows(
+      readCachedOnlineLeaderboard(mode),
+      readLocalLeaderboard(mode),
+    );
   }
 
   function saveLocalLeaderboardScore(mode, name, score) {
@@ -850,6 +911,101 @@
       localLeaderboardKey(mode),
       JSON.stringify(rows.slice(0, LEADERBOARD_LIMIT)),
     );
+  }
+
+  function readPendingScores() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PENDING_SCORES_STORAGE_KEY) || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (entry) =>
+          entry
+          && ["standard", "strict"].includes(entry.mode)
+          && typeof entry.playerId === "string"
+          && normalizePlayerName(entry.name)
+          && Number.isFinite(Number(entry.score)),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  function writePendingScores(entries) {
+    localStorage.setItem(
+      PENDING_SCORES_STORAGE_KEY,
+      JSON.stringify(entries.slice(0, LEADERBOARD_LIMIT)),
+    );
+  }
+
+  function enqueuePendingScore(entry) {
+    const pending = readPendingScores();
+    const key = `${entry.mode}:${entry.playerId}`;
+    const existingIndex = pending.findIndex(
+      (pendingEntry) => `${pendingEntry.mode}:${pendingEntry.playerId}` === key,
+    );
+    if (existingIndex === -1) {
+      pending.push(entry);
+    } else if (Number(entry.score) >= Number(pending[existingIndex].score)) {
+      pending[existingIndex] = entry;
+    }
+    writePendingScores(pending);
+  }
+
+  function removePendingScore(mode, playerId) {
+    const key = `${mode}:${playerId}`;
+    writePendingScores(
+      readPendingScores().filter(
+        (entry) => `${entry.mode}:${entry.playerId}` !== key,
+      ),
+    );
+  }
+
+  function wait(delay) {
+    return new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+
+  async function fetchWithRetry(url, options = {}, config = {}) {
+    const retries = config.retries ?? ONLINE_REQUEST_RETRIES;
+    const timeoutMs = config.timeoutMs ?? ONLINE_REQUEST_TIMEOUT_MS;
+    let lastError = new Error("在线请求失败");
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+        if (
+          response.status === 408
+          || response.status === 425
+          || response.status === 429
+          || response.status >= 500
+        ) {
+          const statusError = new Error(`HTTP ${response.status}`);
+          statusError.httpStatus = response.status;
+          throw statusError;
+        }
+        return response;
+      } catch (error) {
+        lastError = error;
+        const status = Number(error.httpStatus) || 0;
+        const retryable =
+          error.name === "AbortError"
+          || !status
+          || status === 408
+          || status === 425
+          || status === 429
+          || status >= 500;
+        if (!retryable || attempt === retries) throw error;
+        await wait(ONLINE_RETRY_DELAY_MS * (attempt + 1));
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    }
+
+    throw lastError;
   }
 
   function localScoreRanks(mode, score) {
@@ -925,7 +1081,14 @@
   async function refreshLeaderboard(mode = state.dropMode) {
     state.leaderboardMode = mode;
     state.leaderboardLoading = true;
-    leaderboardStatusEl.textContent = "正在读取排行榜…";
+    const cachedRows = fallbackLeaderboardRows(mode);
+    if (cachedRows.length) {
+      state.leaderboardRows = cachedRows;
+      renderLeaderboard();
+      leaderboardStatusEl.textContent = "正在刷新在线排行榜…";
+    } else {
+      leaderboardStatusEl.textContent = "正在读取排行榜…";
+    }
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       state.leaderboardRows = readLocalLeaderboard(mode);
@@ -935,13 +1098,10 @@
       return;
     }
 
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 3500);
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${SUPABASE_URL}/rest/v1/leaderboard_scores?select=player_id,name,score,updated_at&mode=eq.${encodeURIComponent(mode)}&order=score.desc,updated_at.asc&limit=${LEADERBOARD_LIMIT}`,
         {
-          signal: controller.signal,
           headers: {
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -950,24 +1110,70 @@
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      state.leaderboardRows = Array.isArray(payload)
-        ? payload.map((row) => ({
-            playerId: row.player_id,
-            name: row.name,
-            score: Number(row.score),
-            updatedAt: new Date(row.updated_at).getTime(),
-          }))
-        : [];
+      state.leaderboardRows = normalizeLeaderboardRows(payload);
+      saveCachedOnlineLeaderboard(mode, state.leaderboardRows);
       state.leaderboardLoading = false;
       renderLeaderboard();
       leaderboardStatusEl.textContent = "全球排行榜 · 每次更新显示前 100 名";
     } catch {
-      state.leaderboardRows = readLocalLeaderboard(mode);
+      state.leaderboardRows = fallbackLeaderboardRows(mode);
       state.leaderboardLoading = false;
       renderLeaderboard();
-      leaderboardStatusEl.textContent = "在线服务暂不可用，已显示本机成绩";
+      leaderboardStatusEl.textContent = readCachedOnlineLeaderboard(mode).length
+        ? "在线服务连接较慢，已显示上次在线成绩"
+        : "在线服务暂不可用，已显示本机成绩";
+    }
+  }
+
+  async function submitScoreToCloud(entry) {
+    const response = await fetchWithRetry(`${SUPABASE_URL}/rest/v1/rpc/submit_score`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        p_mode: entry.mode,
+        p_player_id: entry.playerId,
+        p_name: entry.name,
+        p_score: entry.score,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function flushPendingScores() {
+    if (
+      pendingScoreFlushPromise
+      || !SUPABASE_URL
+      || !SUPABASE_ANON_KEY
+      || !navigator.onLine
+    ) {
+      return pendingScoreFlushPromise;
+    }
+
+    pendingScoreFlushPromise = (async () => {
+      let submitted = false;
+      const pending = readPendingScores();
+      for (const entry of pending) {
+        try {
+          await submitScoreToCloud(entry);
+          removePendingScore(entry.mode, entry.playerId);
+          submitted = true;
+        } catch {
+          // Keep failed scores for the next online session.
+        }
+      }
+      if (submitted) await refreshLeaderboard(state.leaderboardMode);
+      return submitted;
+    })();
+
+    try {
+      return await pendingScoreFlushPromise;
     } finally {
-      window.clearTimeout(timeout);
+      pendingScoreFlushPromise = null;
     }
   }
 
@@ -988,27 +1194,18 @@
       return;
     }
 
+    const submission = {
+      mode: state.dropMode,
+      playerId: state.playerId,
+      name,
+      score: state.score,
+      createdAt: Date.now(),
+    };
+    enqueuePendingScore(submission);
+
     try {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 3500);
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_score`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          "content-type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          p_mode: state.dropMode,
-          p_player_id: state.playerId,
-          p_name: name,
-          p_score: state.score,
-        }),
-      });
-      window.clearTimeout(timeout);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const ranks = await response.json();
+      const ranks = await submitScoreToCloud(submission);
+      removePendingScore(submission.mode, submission.playerId);
       finalRankEl.textContent = formatLeaderboardRank(ranks.runRank);
       finalBestRankEl.textContent = formatLeaderboardRank(ranks.bestRank);
       scoreSubmitStatus.textContent = `已自动提交 · ${name} · 最高分 ${formatNumber(ranks.bestScore)}`;
@@ -1017,8 +1214,8 @@
       const ranks = localScoreRanks(state.dropMode, state.score);
       finalRankEl.textContent = `${formatLeaderboardRank(ranks.runRank)} · 本机`;
       finalBestRankEl.textContent = `${formatLeaderboardRank(ranks.bestRank)} · 本机`;
-      scoreSubmitStatus.textContent = `在线服务暂不可用 · 已保存到本机 · ${name}`;
-      state.leaderboardRows = readLocalLeaderboard(state.dropMode);
+      scoreSubmitStatus.textContent = `网络连接较慢 · 已保存到本机，联网后自动补交 · ${name}`;
+      state.leaderboardRows = fallbackLeaderboardRows(state.dropMode);
       renderLeaderboard();
     }
   }
@@ -3202,7 +3399,11 @@
   setupInput();
   startSpaceBackground();
   refreshLeaderboard(state.dropMode);
+  void flushPendingScores();
   window.addEventListener("resize", scheduleCanvasSync);
+  window.addEventListener("online", () => {
+    void flushPendingScores();
+  });
   if ("ResizeObserver" in window) {
     const canvasObserver = new ResizeObserver(scheduleCanvasSync);
     [boardFrame, nextCanvas, holdCanvas, mobileHoldCanvas].forEach((element) => {
