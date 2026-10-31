@@ -1741,7 +1741,6 @@
       state.score += gainedScore;
       spawnLineClearEffects(fullRows, gainedScore);
       playSound(fullRows.length === 4 ? "tetris" : "clear");
-      updateStats();
 
       const clearedRowSet = new Set(fullRows);
       const remainingRows = state.board.filter(
@@ -1752,6 +1751,8 @@
       }
       state.board = remainingRows;
       state.boardLayerDirty = true;
+      state.riskMultiplier = calculateRiskMultiplier();
+      updateStats();
 
       scheduleGameplay(() => {
         state.clearedRows = [];
